@@ -5,15 +5,20 @@ using System.Collections.Generic;
 
 
 // [GENERATED_STRUCT_START]
-public struct CanFrame {
+public struct CanFrame
+{
     public int TestInt;
 }
 // [GENERATED_STRUCT_END]
 
-    public class CanSender
+public class CanSender
 {
+    // [PORTNAME_START]
     private const string PortName = "COM3";
-    private const int BaudRate = 1500000; // Passend zum uC
+    // [PORTNAME_END]
+    // [BAUDRATE_START]
+    private const int BaudRate = 1500000;
+    // [BAUDRATE_END]
 
     public static void Main()
     {
@@ -53,12 +58,13 @@ public struct CanFrame {
         serialPort.Write(encoded, 0, encoded.Length);
     }
     // [GENERATED_SERIALIZE_START]
-    private static byte[] SerializeFrame(CanFrame frame) {
+    private static byte[] SerializeFrame(CanFrame frame)
+    {
         List<byte> bytes = new List<byte>();
         bytes.AddRange(BitConverter.GetBytes(frame.TestInt));
         return bytes.ToArray();
     }
-// [GENERATED_SERIALIZE_END]
+    // [GENERATED_SERIALIZE_END]
     public static byte[] CobsEncode(byte[] input)
     {
         List<byte> output = new List<byte>();

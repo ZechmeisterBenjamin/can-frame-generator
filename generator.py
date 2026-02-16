@@ -1,13 +1,21 @@
 import re
 import os
+import json
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
 from tkinter import filedialog
 
-# --- PFADE (Mit r"..." und normalen Slashes für maximale Stabilität) ---
-PATH_CS = r"C:/Users/benja/Documents/htlwy/2526/ccit/CANSender/CANSender/Program.cs"
-PATH_CPP = r"C:/Users/benja/Documents/htlwy/2526/ccit/14_COBS_Receive/05_CAN_Signals/UserCode/UserMain.cpp"
+# --- KONFIGURATIONSDATEI ---
+CONFIG_FILE = "generator_config.json"
+
+# --- DEFAULT PFADE ---
+DEFAULT_CONFIG = {
+    "path_cs": r"C:/Users/benja/Documents/htlwy/2526/ccit/CANSender/CANSender/Program.cs",
+    "path_cpp": r"C:/Users/benja/Documents/htlwy/2526/ccit/14_COBS_Receive/05_CAN_Signals/UserCode/UserMain.cpp",
+    "com_port": "COM3",
+    "baud_rate": "1500000"
+}
 
 # Datatype mapping
 TYPE_MAPPING = {
@@ -28,11 +36,15 @@ class GeneratorUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Variable Generator PRO - Drag & Sort")
-        self.root.geometry("900x600")
+        self.root.geometry("900x650")
 
-        # Initialize paths
-        self.path_cs = PATH_CS
-        self.path_cpp = PATH_CPP
+        # Konfiguration laden
+        self.config = self.load_config()
+        
+        self.path_cs = self.config["path_cs"]
+        self.path_cpp = self.config["path_cpp"]
+        self.com_port = self.config["com_port"]
+        self.baud_rate = self.config["baud_rate"]
 
         self.rows = []
 
@@ -51,6 +63,30 @@ class GeneratorUI:
         self.setup_variables_tab()
 
         self.setup_initial_data()
+    
+    def load_config(self):
+        """Konfiguration aus Datei laden oder Standard verwenden"""
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except:
+                pass
+        return DEFAULT_CONFIG.copy()
+    
+    def save_config(self):
+        """Konfiguration in Datei speichern"""
+        config = {
+            "path_cs": self.path_cs,
+            "path_cpp": self.path_cpp,
+            "com_port": self.com_port,
+            "baud_rate": self.baud_rate
+        }
+        try:
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=4)
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Konfiguration konnte nicht gespeichert werden: {e}")
 
     def setup_config_tab(self):
         path_frame = tk.LabelFrame(self.config_tab, text="Dateipfade", padx=10, pady=10)
@@ -71,6 +107,28 @@ class GeneratorUI:
         self.cpp_path_label = tk.Label(cpp_frame, text=self.path_cpp, fg="blue", anchor="w")
         self.cpp_path_label.pack(side="left", fill="x", expand=True, padx=5)
         tk.Button(cpp_frame, text="Durchsuchen", command=self.browse_cpp_file).pack(side="right")
+
+        # C# Settings Frame
+        settings_frame = tk.LabelFrame(self.config_tab, text="C# Projekteinstellungen", padx=10, pady=10)
+        settings_frame.pack(fill="x", padx=10, pady=5)
+
+        # COM Port
+        com_frame = tk.Frame(settings_frame)
+        com_frame.pack(fill="x", pady=5)
+        tk.Label(com_frame, text="COM-Port:", width=12, anchor="w").pack(side="left")
+        self.com_port_entry = tk.Entry(com_frame, width=20)
+        self.com_port_entry.insert(0, self.com_port)
+        self.com_port_entry.pack(side="left", padx=5)
+        tk.Button(com_frame, text="Speichern", command=self.save_com_port).pack(side="left")
+
+        # Baud Rate
+        baud_frame = tk.Frame(settings_frame)
+        baud_frame.pack(fill="x", pady=5)
+        tk.Label(baud_frame, text="Baudrate:", width=12, anchor="w").pack(side="left")
+        self.baud_rate_entry = tk.Entry(baud_frame, width=20)
+        self.baud_rate_entry.insert(0, self.baud_rate)
+        self.baud_rate_entry.pack(side="left", padx=5)
+        tk.Button(baud_frame, text="Speichern", command=self.save_baud_rate).pack(side="left")
 
     def setup_variables_tab(self):
         # Header
@@ -101,6 +159,7 @@ class GeneratorUI:
         if file_path:
             self.path_cs = file_path
             self.cs_path_label.config(text=self.path_cs)
+            self.save_config()
             self.setup_initial_data()
 
     def browse_cpp_file(self):
@@ -111,7 +170,50 @@ class GeneratorUI:
         if file_path:
             self.path_cpp = file_path
             self.cpp_path_label.config(text=self.path_cpp)
+            self.save_config()
             self.setup_initial_data()
+
+    def save_com_port(self):
+        """COM-Port speichern und C# Code aktualisieren"""
+        self.com_port = self.com_port_entry.get().strip()
+        if self.com_port:
+            self.save_config()
+            try:
+                self.update_cs_port_and_baud()
+                messagebox.showinfo("Erfolg", f"COM-Port '{self.com_port}' gespeichert und C# Code aktualisiert")
+            except Exception as e:
+                messagebox.showerror("Fehler", f"COM-Port gespeichert, aber C# Code konnte nicht aktualisiert werden:\n{e}")
+        else:
+            messagebox.showerror("Fehler", "COM-Port darf nicht leer sein")
+
+    def save_baud_rate(self):
+        """Baudrate speichern und C# Code aktualisieren"""
+        baud = self.baud_rate_entry.get().strip()
+        if baud.isdigit():
+            self.baud_rate = baud
+            self.save_config()
+            try:
+                self.update_cs_port_and_baud()
+                messagebox.showinfo("Erfolg", f"Baudrate '{self.baud_rate}' gespeichert und C# Code aktualisiert")
+            except Exception as e:
+                messagebox.showerror("Fehler", f"Baudrate gespeichert, aber C# Code konnte nicht aktualisiert werden:\n{e}")
+        else:
+            messagebox.showerror("Fehler", "Baudrate muss eine Zahl sein")
+
+    def update_cs_port_and_baud(self):
+        """Aktualisiert COM-Port und Baudrate in der C# Datei"""
+        self.replace_in_file(
+            self.path_cs,
+            "// [PORTNAME_START]",
+            "// [PORTNAME_END]",
+            'private const string PortName = "' + self.com_port + '";'
+        )
+        self.replace_in_file(
+            self.path_cs,
+            "// [BAUDRATE_START]",
+            "// [BAUDRATE_END]",
+            'private const int BaudRate = ' + self.baud_rate + ';'
+        )
 
     def setup_initial_data(self):
         # Clear existing rows
@@ -259,11 +361,15 @@ class GeneratorUI:
             raise Exception(f"Lesezugriff verweigert: {file_path}")
 
         pattern = f"{re.escape(start_tag)}.*?{re.escape(end_tag)}"
-        replacement = f"{start_tag}\n{new_content}\n{end_tag}"
         
         if start_tag not in content:
             raise Exception(f"Tag fehlt in {file_path}: {start_tag}")
 
+        # Finde die Einrückung der Start-Tag Zeile
+        match = re.search(f"^([ \t]*){re.escape(start_tag)}", content, re.MULTILINE)
+        indent = match.group(1) if match else ""
+        
+        replacement = f"{start_tag}\n{indent}{new_content}\n{indent}{end_tag}"
         new_text = re.sub(pattern, replacement, content, flags=re.DOTALL)
         
         write_enc = 'utf-8-sig' if file_path.endswith(".cs") else 'utf-8'
