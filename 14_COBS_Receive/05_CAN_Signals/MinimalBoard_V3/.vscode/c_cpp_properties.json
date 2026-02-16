@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "STM32 ARMCC6",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc",
+                "${workspaceFolder}/Core/Inc",
+                "C:/Keil_v5/ARM/ARMCLANG/include",
+                "C:/Keil_v5/ARM/Packs/ARM/CMSIS/5.9.0/CMSIS/Core/Include"
+            ],
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32F4xx", 
+                "__CC_ARM",
+                "__ARMCC_VERSION=6190000",
+                "__weak=__attribute__((weak))",
+                "__packed=__attribute__((packed))"
+            ],
+            "compilerPath": "C:/Keil_v5/ARM/ARMCLANG/bin/armclang.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "windows-clang-arm"
+        }
+    ],
+    "version": 4
+}

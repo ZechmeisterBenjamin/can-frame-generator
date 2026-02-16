@@ -1,0 +1,44 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build STM32 Firmware (Keil)",
+            "type": "shell",
+            "command": "C:\\Keil_v5\\UV4\\UV4.exe",
+            "args": [
+                "-b",
+                "${workspaceFolder}\\YourProjectName.uvprojx",
+                "-j0",
+                "-o",
+                "${workspaceFolder}\\build_log.txt"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": ["relative", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*)\\((\\d+)\\):\\s+(error|warning):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "severity": 3,
+                    "message": 4
+                }
+            },
+            "detail": "Invokes Keil UV4 in batch mode to build the target."
+        },
+        {
+            "label": "Flash to Target",
+            "type": "shell",
+            "command": "C:\\Keil_v5\\UV4\\UV4.exe",
+            "args": [
+                "-f",
+                "${workspaceFolder}\\MDK-ARM\\MinimalBoard_V3.uvprojx",
+                "-j0"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}
