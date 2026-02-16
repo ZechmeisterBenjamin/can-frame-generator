@@ -450,7 +450,7 @@ class GeneratorUI:
         self.events_text.pack(fill="both", expand=True)
         self.events_text.bind("<KeyRelease>", lambda e: self.update_transition_combos())
 
-        # Mittlerer Bereich: Übergänge Builder + Liste (nebeneinander)
+        # Mittlerer Bereich: Übergänge Builder + Liste + Outputs (nebeneinander)
         middle_container = tk.Frame(main_container)
         middle_container.pack(fill="both", expand=True, pady=5)
 
@@ -493,6 +493,12 @@ class GeneratorUI:
         click_frame.pack(fill="x", pady=(0, 8))
         self.click_check = tk.BooleanVar(value=False)
         tk.Checkbutton(click_frame, text="Click Edge (wahr)", variable=self.click_check, width=18).pack(anchor="w")
+
+        # Output Action
+        tk.Label(builder_frame, text="Output Action (optional):", font=("Arial", 8, "bold")).pack(anchor="w", pady=(5, 2))
+        self.output_action_entry = tk.Entry(builder_frame, width=25)
+        self.output_action_entry.pack(fill="x", pady=(0, 8))
+        self.output_action_entry.insert(0, "")
 
         # Add Button
         add_trans_btn = tk.Button(builder_frame, text="✓ Übergang hinzufügen", command=self.add_transition, bg="#90EE90", font=("Arial", 9, "bold"))
@@ -559,13 +565,13 @@ class GeneratorUI:
         self.events_text.delete(1.0, tk.END)
         self.events_text.insert(1.0, "Init\nsendFirstFrame\nsendSecondFrame\nsendThirdFrame\nsendFourthFrame")
         
-        # Übergänge mit neuer Struktur (conditions als Liste)
-        # Format: (from_state, event, to_state, conditions, is_wildcard)
+        # Übergänge mit neuer Struktur (conditions als Liste, output_action)
+        # Format: (from_state, event, to_state, conditions, output_action, is_wildcard)
         self.sm_transitions = [
-            ("Ready", "sendFirstFrame", "pauseFirstFrame", [("click_Edge", "", "")], False),
-            ("pauseFirstFrame", "sendSecondFrame", "pauseSecondFrame", [("t", ">", "0.3")], False),
-            ("pauseSecondFrame", "sendThirdFrame", "pauseThirdFrame", [("t", ">", "1.0")], False),
-            ("pauseThirdFrame", "sendFourthFrame", "Ready", [("t", ">", "1.9")], False)
+            ("Ready", "sendFirstFrame", "pauseFirstFrame", [("click_Edge", "", "")], "wechselSignal.toggle();", False),
+            ("pauseFirstFrame", "sendSecondFrame", "pauseSecondFrame", [("t", ">", "0.3")], "startFloatSignal = startFloatSignal + 0.5f;", False),
+            ("pauseSecondFrame", "sendThirdFrame", "pauseThirdFrame", [("t", ">", "1.0")], "startIntSignal1 = startIntSignal1 + 1;", False),
+            ("pauseThirdFrame", "sendFourthFrame", "Ready", [("t", ">", "1.9")], "startIntSignal5 = startIntSignal5 + 5;", False)
         ]
         self.refresh_transitions_listbox()
         self.update_transition_combos()
@@ -628,11 +634,13 @@ class GeneratorUI:
         
         # Weitere Übergänge
         for trans in transitions:
-            # Handle both old format (4 elements) and new format (5 elements with wildcard marker)
-            if len(trans) == 5:
-                from_state, event, to_state, conditions, is_wildcard = trans
+            # Handle new format (6 elements with output_action and wildcard marker)
+            if len(trans) == 6:
+                from_state, event, to_state, conditions, output_action, is_wildcard = trans
             else:
+                # Old format compatibility
                 from_state, event, to_state, conditions = trans
+                output_action = ""
                 is_wildcard = False
             
             condition_str = ""
@@ -654,10 +662,40 @@ class GeneratorUI:
         code += """\t\telse{ E = Event::None; }
 \t\t\t
 \t\t\t//Outputs
-\t\t\tif\t\t\t(E==Event::Init) {}
-\t\t\t// TODO: Weitere Event-Outputs implementieren
-\t\t\t
-\t\t\tiniOK = true;
+"""
+        
+        # Generate outputs for each event
+        output_actions = {}
+        for trans in transitions:
+            if len(trans) == 6:
+                from_state, event, to_state, conditions, output_action, is_wildcard = trans
+            else:
+                from_state, event, to_state, conditions = trans
+                output_action = ""
+            
+            if output_action:
+                output_actions[event] = output_action
+        
+        # Generate if-else chain for outputs
+        if output_actions:
+            first_output = True
+            for event in events:
+                if event != "Init" and event in output_actions:  # Skip Init event
+                    action = output_actions[event]
+                    if first_output:
+                        code += f"\t\tif\t\t\t(E==Event::{event:<20}\t) {action}\n"
+                        first_output = False
+                    else:
+                        code += f"\t\telse if\t(E==Event::{event:<20}\t) {action}\n"
+            
+            if not first_output:  # Only add else if we added at least one output
+                code += "\t\telse;\n"
+        else:
+            code += f"\t\tif\t\t\t(E==Event::Init) {{}}\n"
+            code += "\t\t// TODO: Weitere Event-Outputs implementieren\n"
+        
+        code += """\t\t
+\t\tiniOK = true;
 \t\t}
 }};"""
 
@@ -704,14 +742,17 @@ class GeneratorUI:
         if self.click_check.get():
             conditions.append(("click_Edge", "", ""))
         
+        # Output Action
+        output_action = self.output_action_entry.get().strip()
+        
         # Wildcard-Handling: "(alle)" expandieren
         if from_state == "(alle)":
             states_raw = self.states_text.get(1.0, tk.END).strip()
             states = [s.strip() for s in states_raw.split('\n') if s.strip()]
             for state in states:
-                self.sm_transitions.append((state, event, to_state, conditions, True))  # True = wildcard marker
+                self.sm_transitions.append((state, event, to_state, conditions, output_action, True))  # True = wildcard marker
         else:
-            self.sm_transitions.append((from_state, event, to_state, conditions, False))
+            self.sm_transitions.append((from_state, event, to_state, conditions, output_action, False))
         
         self.refresh_transitions_listbox()
         self.reset_transition_form()
@@ -757,11 +798,13 @@ class GeneratorUI:
             idx = selection[0]
             trans = self.sm_transitions[idx]
             
-            # Handle both old format (4 elements) and new format (5 elements with wildcard marker)
-            if len(trans) == 5:
-                from_state, event, to_state, conditions, is_wildcard = trans
+            # Handle new format (6 elements with output_action and wildcard marker)
+            if len(trans) == 6:
+                from_state, event, to_state, conditions, output_action, is_wildcard = trans
             else:
+                # Old format compatibility
                 from_state, event, to_state, conditions = trans
+                output_action = ""
                 is_wildcard = False
             
             # Fülle die Felder
@@ -782,6 +825,10 @@ class GeneratorUI:
                     self.time_val_entry.delete(0, tk.END)
                     self.time_val_entry.insert(0, val)
             
+            # Output Action laden
+            self.output_action_entry.delete(0, tk.END)
+            self.output_action_entry.insert(0, output_action)
+            
             # Entferne den alten Übergang (wird als neuer hinzugefügt)
             self.sm_transitions.pop(idx)
             self.refresh_transitions_listbox()
@@ -794,10 +841,13 @@ class GeneratorUI:
         """Aktualisiert die Listbox mit Übergängen"""
         self.transitions_listbox.delete(0, tk.END)
         for trans in self.sm_transitions:
-            if len(trans) == 5:
-                from_state, event, to_state, conditions, is_wildcard = trans
+            # Handle new format (6 elements with output_action and wildcard marker)
+            if len(trans) == 6:
+                from_state, event, to_state, conditions, output_action, is_wildcard = trans
             else:
+                # Old format compatibility
                 from_state, event, to_state, conditions = trans
+                output_action = ""
                 is_wildcard = False
             
             wildcard_marker = " [*]" if is_wildcard else ""
@@ -814,6 +864,11 @@ class GeneratorUI:
                 text = f"{from_state}{wildcard_marker} → [{event}] → {to_state}  WENN  {cond_text}"
             else:
                 text = f"{from_state}{wildcard_marker} → [{event}] → {to_state}"
+            
+            # Add output action if present
+            if output_action:
+                text += f"  |  {output_action}"
+            
             self.transitions_listbox.insert(tk.END, text)
 
     def reset_transition_form(self):
@@ -826,6 +881,7 @@ class GeneratorUI:
         self.time_op_combo.set(">")
         self.time_val_entry.delete(0, tk.END)
         self.time_val_entry.insert(0, "0")
+        self.output_action_entry.delete(0, tk.END)
 
     def copy_code_to_clipboard(self):
         """Kopiert den generierten Code in die Zwischenablage"""
