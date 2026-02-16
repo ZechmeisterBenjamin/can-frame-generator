@@ -479,6 +479,15 @@ FodyWeavers.xsd
 *.uvgui.*
 *.uvguix.*
 
+# Run-Time Environment (auto-generated)
+RTE/
+
+# Compiler response files
+*.crf
+
+# Event Recorder
+EventRecorderStub.scvd
+
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
