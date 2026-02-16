@@ -35,8 +35,9 @@ TYPE_MAPPING = {
 class GeneratorUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Variable Generator PRO - Drag & Sort")
-        self.root.geometry("900x650")
+        self.root.title("CAN Frame & State Machine Generator")
+        self.root.geometry("1200x700")
+        self.root.minsize(800, 600)
 
         # Konfiguration laden
         self.config = self.load_config()
@@ -47,6 +48,9 @@ class GeneratorUI:
         self.baud_rate = self.config["baud_rate"]
 
         self.rows = []
+        self.states = []
+        self.events = []
+        self.transitions = []
 
         # Create Notebook (Tabs)
         self.notebook = ttk.Notebook(root)
@@ -61,6 +65,11 @@ class GeneratorUI:
         self.variables_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.variables_tab, text="Variablen")
         self.setup_variables_tab()
+
+        # State Machine Tab
+        self.statemachine_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.statemachine_tab, text="Zustandsautomaten")
+        self.setup_statemachine_tab()
 
         self.setup_initial_data()
     
@@ -405,6 +414,428 @@ class GeneratorUI:
             messagebox.showinfo("Erfolg", "Code erfolgreich generiert!")
         except Exception as e:
             messagebox.showerror("Fehler", str(e))
+
+    def setup_statemachine_tab(self):
+        """Tab für Zustandsautomaten mit responsivem Design"""
+        main_container = tk.Frame(self.statemachine_tab)
+        main_container.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Konfigurierungs-Bereich (oben)
+        config_frame = tk.LabelFrame(main_container, text="Konfiguration", padx=10, pady=10)
+        config_frame.pack(fill="x", pady=(0, 5))
+
+        # Klassenname
+        class_frame = tk.Frame(config_frame)
+        class_frame.pack(fill="x", pady=(0, 5))
+        tk.Label(class_frame, text="Klassenname:", width=15, anchor="w").pack(side="left")
+        self.classname_entry = tk.Entry(class_frame, width=40)
+        self.classname_entry.insert(0, "CanFrameSender")
+        self.classname_entry.pack(side="left", padx=5, fill="x", expand=True)
+
+        # States und Events nebeneinander
+        input_container = tk.Frame(config_frame)
+        input_container.pack(fill="both", expand=True, pady=(0, 5))
+
+        # States
+        states_frame = tk.LabelFrame(input_container, text="States", padx=5, pady=5)
+        states_frame.pack(side="left", fill="both", expand=True, padx=(0, 2))
+        self.states_text = tk.Text(states_frame, height=4, width=25)
+        self.states_text.pack(fill="both", expand=True)
+        self.states_text.bind("<KeyRelease>", lambda e: self.update_transition_combos())
+
+        # Events
+        events_frame = tk.LabelFrame(input_container, text="Events", padx=5, pady=5)
+        events_frame.pack(side="left", fill="both", expand=True, padx=2)
+        self.events_text = tk.Text(events_frame, height=4, width=25)
+        self.events_text.pack(fill="both", expand=True)
+        self.events_text.bind("<KeyRelease>", lambda e: self.update_transition_combos())
+
+        # Mittlerer Bereich: Übergänge Builder + Liste (nebeneinander)
+        middle_container = tk.Frame(main_container)
+        middle_container.pack(fill="both", expand=True, pady=5)
+
+        # Linke Seite: Builder
+        builder_frame = tk.LabelFrame(middle_container, text="Neuer Übergang", padx=8, pady=8)
+        builder_frame.pack(side="left", fill="both", expand=False, padx=(0, 5), ipadx=5)
+
+        # Von State
+        tk.Label(builder_frame, text="Von State:", font=("Arial", 8, "bold")).pack(anchor="w", pady=(0, 2))
+        self.trans_from_combo = ttk.Combobox(builder_frame, width=20, state="readonly")
+        self.trans_from_combo.pack(fill="x", pady=(0, 5))
+
+        # Event
+        tk.Label(builder_frame, text="Event:", font=("Arial", 8, "bold")).pack(anchor="w", pady=(0, 2))
+        self.trans_event_combo = ttk.Combobox(builder_frame, width=20, state="readonly")
+        self.trans_event_combo.pack(fill="x", pady=(0, 5))
+
+        # Zu State
+        tk.Label(builder_frame, text="Zu State:", font=("Arial", 8, "bold")).pack(anchor="w", pady=(0, 2))
+        self.trans_to_combo = ttk.Combobox(builder_frame, width=20, state="readonly")
+        self.trans_to_combo.pack(fill="x", pady=(0, 5))
+
+        # Bedingungen
+        tk.Label(builder_frame, text="Bedingungen (optional):", font=("Arial", 8, "bold")).pack(anchor="w", pady=(5, 2))
+
+        # Time Condition (t)
+        time_frame = tk.Frame(builder_frame)
+        time_frame.pack(fill="x", pady=(0, 5))
+        self.time_check = tk.BooleanVar(value=False)
+        tk.Checkbutton(time_frame, text="Zeit (t)", variable=self.time_check, width=8).pack(side="left")
+        self.time_op_combo = ttk.Combobox(time_frame, width=3, state="readonly", values=[">", "<", "==", ">=", "<=", "!="])
+        self.time_op_combo.set(">")
+        self.time_op_combo.pack(side="left", padx=(0, 3))
+        self.time_val_entry = tk.Entry(time_frame, width=8)
+        self.time_val_entry.insert(0, "0")
+        self.time_val_entry.pack(side="left")
+
+        # Click Edge Condition
+        click_frame = tk.Frame(builder_frame)
+        click_frame.pack(fill="x", pady=(0, 8))
+        self.click_check = tk.BooleanVar(value=False)
+        tk.Checkbutton(click_frame, text="Click Edge (wahr)", variable=self.click_check, width=18).pack(anchor="w")
+
+        # Add Button
+        add_trans_btn = tk.Button(builder_frame, text="✓ Übergang hinzufügen", command=self.add_transition, bg="#90EE90", font=("Arial", 9, "bold"))
+        add_trans_btn.pack(fill="x")
+
+        # Rechte Seite: Übergänge Liste
+        list_frame = tk.LabelFrame(middle_container, text="Definierte Übergänge", padx=8, pady=8)
+        list_frame.pack(side="left", fill="both", expand=True, padx=(5, 0))
+
+        # Listbox mit Scrollbar
+        scrollbar_trans = tk.Scrollbar(list_frame)
+        scrollbar_trans.pack(side="right", fill="y")
+        
+        self.transitions_listbox = tk.Listbox(list_frame, height=10, yscrollcommand=scrollbar_trans.set, font=("Courier", 8))
+        self.transitions_listbox.pack(fill="both", expand=True)
+        scrollbar_trans.config(command=self.transitions_listbox.yview)
+
+        # Delete Button
+        del_trans_btn = tk.Button(list_frame, text="✗ Markierten Übergang löschen", command=self.delete_transition, bg="#FFB6C6")
+        del_trans_btn.pack(fill="x", pady=(5, 0))
+
+        # Move Buttons Frame
+        move_frame = tk.Frame(list_frame)
+        move_frame.pack(fill="x", pady=(5, 0))
+        tk.Button(move_frame, text="↑ Nach oben", command=self.move_transition_up, width=12).pack(side="left", padx=2)
+        tk.Button(move_frame, text="↓ Nach unten", command=self.move_transition_down, width=12).pack(side="left", padx=2)
+        tk.Button(move_frame, text="✎ Bearbeiten", command=self.edit_transition, bg="#FFE4B5", width=12).pack(side="left", padx=2)
+
+        # Unterer Bereich: Code Output + Buttons
+        bottom_container = tk.Frame(main_container)
+        bottom_container.pack(fill="both", expand=True, pady=(5, 0))
+
+        # Code Output
+        right_frame = tk.LabelFrame(bottom_container, text="Generierter C++ Code", padx=10, pady=10)
+        right_frame.pack(fill="both", expand=True, side="top")
+
+        # Code Text mit Scrollbar
+        scrollbar = tk.Scrollbar(right_frame)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.code_output = tk.Text(right_frame, height=10, yscrollcommand=scrollbar.set, font=("Courier", 8))
+        self.code_output.pack(fill="both", expand=True)
+        scrollbar.config(command=self.code_output.yview)
+
+        # Buttons Bereich
+        btn_frame = tk.Frame(bottom_container)
+        btn_frame.pack(fill="x", side="bottom", pady=(5, 0))
+        
+        tk.Button(btn_frame, text="CODE GENERIEREN", command=self.generate_statemachine, bg="green", fg="white", font=('Arial', 10, 'bold')).pack(side="right", padx=5)
+        tk.Button(btn_frame, text="Code kopieren", command=self.copy_code_to_clipboard, font=('Arial', 9)).pack(side="right", padx=2)
+        tk.Button(btn_frame, text="Beispiel laden", command=self.load_example_sm, font=('Arial', 9)).pack(side="right", padx=2)
+
+        # State machine transitions storage
+        self.sm_transitions = []
+
+    def load_example_sm(self):
+        """Lädt ein Beispiel für einen Zustandsautomaten"""
+        self.classname_entry.delete(0, tk.END)
+        self.classname_entry.insert(0, "CanFrameSender")
+
+        self.states_text.delete(1.0, tk.END)
+        self.states_text.insert(1.0, "Ready\npauseFirstFrame\npauseSecondFrame\npauseThirdFrame")
+        
+        self.events_text.delete(1.0, tk.END)
+        self.events_text.insert(1.0, "Init\nsendFirstFrame\nsendSecondFrame\nsendThirdFrame\nsendFourthFrame")
+        
+        # Übergänge mit neuer Struktur (conditions als Liste)
+        # Format: (from_state, event, to_state, conditions, is_wildcard)
+        self.sm_transitions = [
+            ("Ready", "sendFirstFrame", "pauseFirstFrame", [("click_Edge", "", "")], False),
+            ("pauseFirstFrame", "sendSecondFrame", "pauseSecondFrame", [("t", ">", "0.3")], False),
+            ("pauseSecondFrame", "sendThirdFrame", "pauseThirdFrame", [("t", ">", "1.0")], False),
+            ("pauseThirdFrame", "sendFourthFrame", "Ready", [("t", ">", "1.9")], False)
+        ]
+        self.refresh_transitions_listbox()
+        self.update_transition_combos()
+
+    def generate_statemachine(self):
+        """Generiert den C++ Code für den Zustandsautomaten"""
+        classname = self.classname_entry.get().strip()
+        if not classname:
+            messagebox.showerror("Fehler", "Klassenname ist erforderlich!")
+            return
+
+        states_raw = self.states_text.get(1.0, tk.END).strip()
+        events_raw = self.events_text.get(1.0, tk.END).strip()
+
+        if not states_raw or not events_raw:
+            messagebox.showerror("Fehler", "States und Events sind erforderlich!")
+            return
+
+        if not self.sm_transitions:
+            messagebox.showerror("Fehler", "Mindestens ein Übergang ist erforderlich!")
+            return
+
+        states = [s.strip() for s in states_raw.split('\n') if s.strip()]
+        events = [e.strip() for e in events_raw.split('\n') if e.strip()]
+
+        # Generiere C++ Code
+        cpp_code = self._generate_cpp_statemachine(classname, states, events, self.sm_transitions)
+        
+        self.code_output.delete(1.0, tk.END)
+        self.code_output.insert(1.0, cpp_code)
+
+    def _generate_cpp_statemachine(self, classname, states, events, transitions):
+        """Generiert C++ Zustandsautomaten Code"""
+        states_enum = ", ".join(states)
+        events_enum = ", ".join(events)
+
+        code = f"""class {classname} {{
+\tpublic:
+\t\tenum class State {{ {states_enum} }} S;
+\t\tenum class Event {{ None, {events_enum} }} E;
+\t\t
+\t\tbool\t\tiniOK = false;
+\t\tuint64_t\tt_cyc = 0;
+\t\tfloat\t\tt = 0;
+
+\t\tbool\t\tclick_Edge = false;
+
+\t\tvoid compute(float T)
+\t\t{{
+\t\t\t
+\t\t\tif(!iniOK) t_cyc = 0;
+\t\t\telse if(E == Event::None) t_cyc++;
+\t\t\telse t_cyc = 0;
+\t\t\tt = (t_cyc + 0.5f) * T;
+\t\t\t
+"""
+        # Erstes Transition als Init
+        first_state = transitions[0][0] if transitions else states[0]
+        code += f"\t\tif     (!iniOK) {{ E = Event::Init; S = State::{first_state}; }}\n"
+        
+        # Weitere Übergänge
+        for trans in transitions:
+            # Handle both old format (4 elements) and new format (5 elements with wildcard marker)
+            if len(trans) == 5:
+                from_state, event, to_state, conditions, is_wildcard = trans
+            else:
+                from_state, event, to_state, conditions = trans
+                is_wildcard = False
+            
+            condition_str = ""
+            
+            if conditions:
+                cond_parts = []
+                for var, op, val in conditions:
+                    if var == "click_Edge":
+                        cond_parts.append("click_Edge")
+                    else:
+                        cond_parts.append(f"{var} {op} {val}")
+                condition_str = " && ".join(cond_parts)
+            
+            if condition_str:
+                code += f"\t\telse if(S==State::{from_state} && {condition_str}) {{ E = Event::{event}; S = State::{to_state}; }}\n"
+            else:
+                code += f"\t\telse if(S==State::{from_state}) {{ E = Event::{event}; S = State::{to_state}; }}\n"
+        
+        code += """\t\telse{ E = Event::None; }
+\t\t\t
+\t\t\t//Outputs
+\t\t\tif\t\t\t(E==Event::Init) {}
+\t\t\t// TODO: Weitere Event-Outputs implementieren
+\t\t\t
+\t\t\tiniOK = true;
+\t\t}
+}};"""
+
+        return code
+
+    def update_transition_combos(self):
+        """Aktualisiert die Dropdowns mit aktuellen States und Events"""
+        states_raw = self.states_text.get(1.0, tk.END).strip()
+        events_raw = self.events_text.get(1.0, tk.END).strip()
+        
+        states = [s.strip() for s in states_raw.split('\n') if s.strip()]
+        events = [e.strip() for e in events_raw.split('\n') if e.strip()]
+        
+        # Füge "(alle)" Option hinzu
+        states_with_all = ["(alle)"] + states
+        
+        self.trans_from_combo['values'] = states_with_all
+        self.trans_to_combo['values'] = states
+        self.trans_event_combo['values'] = events
+
+    def add_transition(self):
+        """Fügt einen neuen Übergang hinzu"""
+        from_state = self.trans_from_combo.get()
+        event = self.trans_event_combo.get()
+        to_state = self.trans_to_combo.get()
+        
+        if not from_state or not event or not to_state:
+            messagebox.showerror("Fehler", "Bitte State, Event und Zielstate auswählen!")
+            return
+        
+        # Bedingungen bauen
+        conditions = []
+        
+        # Time-Bedingung
+        if self.time_check.get():
+            time_op = self.time_op_combo.get()
+            time_val = self.time_val_entry.get().strip()
+            if not time_val:
+                messagebox.showerror("Fehler", "Zeitwert erforderlich!")
+                return
+            conditions.append(("t", time_op, time_val))
+        
+        # Click Edge Bedingung (immer nur "true")
+        if self.click_check.get():
+            conditions.append(("click_Edge", "", ""))
+        
+        # Wildcard-Handling: "(alle)" expandieren
+        if from_state == "(alle)":
+            states_raw = self.states_text.get(1.0, tk.END).strip()
+            states = [s.strip() for s in states_raw.split('\n') if s.strip()]
+            for state in states:
+                self.sm_transitions.append((state, event, to_state, conditions, True))  # True = wildcard marker
+        else:
+            self.sm_transitions.append((from_state, event, to_state, conditions, False))
+        
+        self.refresh_transitions_listbox()
+        self.reset_transition_form()
+
+    def delete_transition(self):
+        """Löscht den markierten Übergang"""
+        selection = self.transitions_listbox.curselection()
+        if selection:
+            idx = selection[0]
+            self.sm_transitions.pop(idx)
+            self.refresh_transitions_listbox()
+        else:
+            messagebox.showwarning("Info", "Bitte einen Übergang auswählen!")
+
+    def move_transition_up(self):
+        """Verschiebt den markierten Übergang nach oben"""
+        selection = self.transitions_listbox.curselection()
+        if selection:
+            idx = selection[0]
+            if idx > 0:
+                self.sm_transitions[idx], self.sm_transitions[idx-1] = self.sm_transitions[idx-1], self.sm_transitions[idx]
+                self.refresh_transitions_listbox()
+                self.transitions_listbox.selection_set(idx-1)
+        else:
+            messagebox.showwarning("Info", "Bitte einen Übergang auswählen!")
+
+    def move_transition_down(self):
+        """Verschiebt den markierten Übergang nach unten"""
+        selection = self.transitions_listbox.curselection()
+        if selection:
+            idx = selection[0]
+            if idx < len(self.sm_transitions) - 1:
+                self.sm_transitions[idx], self.sm_transitions[idx+1] = self.sm_transitions[idx+1], self.sm_transitions[idx]
+                self.refresh_transitions_listbox()
+                self.transitions_listbox.selection_set(idx+1)
+        else:
+            messagebox.showwarning("Info", "Bitte einen Übergang auswählen!")
+
+    def edit_transition(self):
+        """Lädt den markierten Übergang zum Bearbeiten in die Felder"""
+        selection = self.transitions_listbox.curselection()
+        if selection:
+            idx = selection[0]
+            trans = self.sm_transitions[idx]
+            
+            # Handle both old format (4 elements) and new format (5 elements with wildcard marker)
+            if len(trans) == 5:
+                from_state, event, to_state, conditions, is_wildcard = trans
+            else:
+                from_state, event, to_state, conditions = trans
+                is_wildcard = False
+            
+            # Fülle die Felder
+            self.trans_from_combo.set(from_state)
+            self.trans_event_combo.set(event)
+            self.trans_to_combo.set(to_state)
+            
+            # Bedingungen laden
+            self.time_check.set(False)
+            self.click_check.set(False)
+            
+            for var, op, val in conditions:
+                if var == "click_Edge":
+                    self.click_check.set(True)
+                elif var == "t":
+                    self.time_check.set(True)
+                    self.time_op_combo.set(op)
+                    self.time_val_entry.delete(0, tk.END)
+                    self.time_val_entry.insert(0, val)
+            
+            # Entferne den alten Übergang (wird als neuer hinzugefügt)
+            self.sm_transitions.pop(idx)
+            self.refresh_transitions_listbox()
+            
+            messagebox.showinfo("Info", "Übergang geladen! Bearbeite und klicke 'Übergang hinzufügen'")
+        else:
+            messagebox.showwarning("Info", "Bitte einen Übergang auswählen!")
+
+    def refresh_transitions_listbox(self):
+        """Aktualisiert die Listbox mit Übergängen"""
+        self.transitions_listbox.delete(0, tk.END)
+        for trans in self.sm_transitions:
+            if len(trans) == 5:
+                from_state, event, to_state, conditions, is_wildcard = trans
+            else:
+                from_state, event, to_state, conditions = trans
+                is_wildcard = False
+            
+            wildcard_marker = " [*]" if is_wildcard else ""
+            
+            if conditions:
+                cond_strs = []
+                for cond in conditions:
+                    var, op, val = cond
+                    if var == "click_Edge":
+                        cond_strs.append("click_Edge")
+                    else:
+                        cond_strs.append(f"{var} {op} {val}")
+                cond_text = " && ".join(cond_strs)
+                text = f"{from_state}{wildcard_marker} → [{event}] → {to_state}  WENN  {cond_text}"
+            else:
+                text = f"{from_state}{wildcard_marker} → [{event}] → {to_state}"
+            self.transitions_listbox.insert(tk.END, text)
+
+    def reset_transition_form(self):
+        """Setzt das Übergangs-Eingabe-Formular zurück"""
+        self.trans_from_combo.set("")
+        self.trans_event_combo.set("")
+        self.trans_to_combo.set("")
+        self.time_check.set(False)
+        self.click_check.set(False)
+        self.time_op_combo.set(">")
+        self.time_val_entry.delete(0, tk.END)
+        self.time_val_entry.insert(0, "0")
+
+    def copy_code_to_clipboard(self):
+        """Kopiert den generierten Code in die Zwischenablage"""
+        code = self.code_output.get(1.0, tk.END)
+        if code.strip():
+            self.root.clipboard_clear()
+            self.root.clipboard_append(code)
+            messagebox.showinfo("Erfolg", "Code wurde in die Zwischenablage kopiert!")
+        else:
+            messagebox.showerror("Fehler", "Kein Code zum Kopieren vorhanden!")
 
 if __name__ == "__main__":
     root = tk.Tk()
