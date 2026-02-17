@@ -697,7 +697,7 @@ class GeneratorUI:
         code += """\t\t
 \t\tiniOK = true;
 \t\t}
-}};"""
+};"""
 
         return code
 
