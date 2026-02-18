@@ -36,8 +36,13 @@ class GeneratorUI:
     def __init__(self, root):
         self.root = root
         self.root.title("CAN Frame & State Machine Generator")
-        self.root.geometry("1200x700")
-        self.root.minsize(800, 600)
+        # Set initial size to work on most screens
+        self.root.geometry("1100x650")
+        self.root.minsize(700, 500)  # Reduced from 800x600 for smaller laptop screens
+        
+        # Configure style for better appearance on small screens
+        style = ttk.Style()
+        style.theme_use('clam')
 
         # Konfiguration laden
         self.config = self.load_config()
@@ -52,23 +57,25 @@ class GeneratorUI:
         self.events = []
         self.transitions = []
 
-        # Create Notebook (Tabs)
+        # Create Notebook (Tabs) with grid layout
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Configuration Tab
         self.config_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.config_tab, text="Konfiguration")
-        self.setup_config_tab()
-
+        
         # Variables Tab
         self.variables_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.variables_tab, text="Variablen")
-        self.setup_variables_tab()
-
+        
         # State Machine Tab
         self.statemachine_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.statemachine_tab, text="Zustandsautomaten")
+
+        # Setup tabs AFTER they're added to notebook
+        self.setup_config_tab()
+        self.setup_variables_tab()
         self.setup_statemachine_tab()
 
         self.setup_initial_data()
@@ -98,67 +105,110 @@ class GeneratorUI:
             messagebox.showerror("Fehler", f"Konfiguration konnte nicht gespeichert werden: {e}")
 
     def setup_config_tab(self):
-        path_frame = tk.LabelFrame(self.config_tab, text="Dateipfade", padx=10, pady=10)
-        path_frame.pack(fill="x", padx=10, pady=5)
+        # Configure grid for responsiveness
+        self.config_tab.grid_rowconfigure(0, weight=1)
+        self.config_tab.grid_columnconfigure(0, weight=1)
+        
+        # Main scrollable frame
+        main_frame = tk.Frame(self.config_tab)
+        main_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        main_frame.grid_rowconfigure(0, weight=1)
+        main_frame.grid_columnconfigure(0, weight=1)
+
+        canvas = tk.Canvas(main_frame, highlightthickness=0)
+        scrollbar = tk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollframe = tk.Frame(canvas)
+        
+        scrollframe.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollframe, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+
+        # --- Path Frame ---
+        path_frame = tk.LabelFrame(scrollframe, text="Dateipfade", padx=10, pady=10)
+        path_frame.pack(fill="x", padx=5, pady=5)
+        path_frame.grid_columnconfigure(1, weight=1)
 
         # C# Path
-        cs_frame = tk.Frame(path_frame)
-        cs_frame.pack(fill="x", pady=5)
-        tk.Label(cs_frame, text="C# Datei:", width=12, anchor="w").pack(side="left")
-        self.cs_path_label = tk.Label(cs_frame, text=self.path_cs, fg="blue", anchor="w")
-        self.cs_path_label.pack(side="left", fill="x", expand=True, padx=5)
-        tk.Button(cs_frame, text="Durchsuchen", command=self.browse_cs_file).pack(side="right")
+        tk.Label(path_frame, text="C# Datei:", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w", pady=(5, 2))
+        self.cs_path_label = tk.Label(path_frame, text=self.path_cs, fg="blue", anchor="w", wraplength=400, justify="left", font=("Arial", 8))
+        self.cs_path_label.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 5))
+        tk.Button(path_frame, text="Durchsuchen...", command=self.browse_cs_file, width=15).grid(row=0, column=2, rowspan=2, padx=(5, 0), sticky="e")
 
         # C++ Path
-        cpp_frame = tk.Frame(path_frame)
-        cpp_frame.pack(fill="x", pady=5)
-        tk.Label(cpp_frame, text="C++ Datei:", width=12, anchor="w").pack(side="left")
-        self.cpp_path_label = tk.Label(cpp_frame, text=self.path_cpp, fg="blue", anchor="w")
-        self.cpp_path_label.pack(side="left", fill="x", expand=True, padx=5)
-        tk.Button(cpp_frame, text="Durchsuchen", command=self.browse_cpp_file).pack(side="right")
+        tk.Label(path_frame, text="C++ Datei:", font=("Arial", 9, "bold")).grid(row=2, column=0, sticky="w", pady=(5, 2))
+        self.cpp_path_label = tk.Label(path_frame, text=self.path_cpp, fg="blue", anchor="w", wraplength=400, justify="left", font=("Arial", 8))
+        self.cpp_path_label.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 5))
+        tk.Button(path_frame, text="Durchsuchen...", command=self.browse_cpp_file, width=15).grid(row=2, column=2, rowspan=2, padx=(5, 0), sticky="e")
 
-        # C# Settings Frame
-        settings_frame = tk.LabelFrame(self.config_tab, text="C# Projekteinstellungen", padx=10, pady=10)
-        settings_frame.pack(fill="x", padx=10, pady=5)
+        # --- Settings Frame ---
+        settings_frame = tk.LabelFrame(scrollframe, text="C# Projekteinstellungen", padx=10, pady=10)
+        settings_frame.pack(fill="x", padx=5, pady=5)
+        settings_frame.grid_columnconfigure(1, weight=1)
 
         # COM Port
-        com_frame = tk.Frame(settings_frame)
-        com_frame.pack(fill="x", pady=5)
-        tk.Label(com_frame, text="COM-Port:", width=12, anchor="w").pack(side="left")
-        self.com_port_entry = tk.Entry(com_frame, width=20)
+        tk.Label(settings_frame, text="COM-Port:", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 5))
+        self.com_port_entry = tk.Entry(settings_frame, width=20, font=("Arial", 9))
         self.com_port_entry.insert(0, self.com_port)
-        self.com_port_entry.pack(side="left", padx=5)
-        tk.Button(com_frame, text="Speichern", command=self.save_com_port).pack(side="left")
+        self.com_port_entry.grid(row=0, column=1, sticky="ew", padx=(0, 5))
+        tk.Button(settings_frame, text="Speichern", command=self.save_com_port, width=12).grid(row=0, column=2, sticky="ew")
 
         # Baud Rate
-        baud_frame = tk.Frame(settings_frame)
-        baud_frame.pack(fill="x", pady=5)
-        tk.Label(baud_frame, text="Baudrate:", width=12, anchor="w").pack(side="left")
-        self.baud_rate_entry = tk.Entry(baud_frame, width=20)
+        tk.Label(settings_frame, text="Baudrate:", font=("Arial", 9, "bold")).grid(row=1, column=0, sticky="w", pady=(0, 5))
+        self.baud_rate_entry = tk.Entry(settings_frame, width=20, font=("Arial", 9))
         self.baud_rate_entry.insert(0, self.baud_rate)
-        self.baud_rate_entry.pack(side="left", padx=5)
-        tk.Button(baud_frame, text="Speichern", command=self.save_baud_rate).pack(side="left")
+        self.baud_rate_entry.grid(row=1, column=1, sticky="ew", padx=(0, 5))
+        tk.Button(settings_frame, text="Speichern", command=self.save_baud_rate, width=12).grid(row=1, column=2, sticky="ew")
 
     def setup_variables_tab(self):
-        # Header
-        header_frame = tk.Frame(self.variables_tab)
-        header_frame.pack(fill="x", padx=10, pady=5)
-        tk.Label(header_frame, text="Sort", width=10).pack(side="left")
-        tk.Label(header_frame, text="Datentyp", width=20, anchor="w").pack(side="left")
-        tk.Label(header_frame, text="C++ Typ", width=15, anchor="w").pack(side="left")
-        tk.Label(header_frame, text="C# Typ", width=15, anchor="w").pack(side="left")
-        tk.Label(header_frame, text="Variablenname", width=20, anchor="w").pack(side="left")
+        # Configure grid weights for responsive layout
+        self.variables_tab.grid_rowconfigure(1, weight=1)  # Content area takes all available space
+        self.variables_tab.grid_columnconfigure(0, weight=1)
 
-        # Container für die Zeilen
-        self.main_frame = tk.Frame(self.variables_tab)
-        self.main_frame.pack(fill="both", expand=True, padx=10)
-
-        # Buttons unten
-        btn_frame = tk.Frame(self.variables_tab, pady=10)
-        btn_frame.pack(fill="x", padx=10)
+        # Top button area
+        top_btn_frame = tk.Frame(self.variables_tab)
+        top_btn_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        top_btn_frame.grid_columnconfigure(0, weight=1)
         
-        tk.Button(btn_frame, text="+ Variable hinzufügen", command=self.add_row, bg="#e1e1e1", padx=10).pack(side="left")
-        tk.Button(btn_frame, text="CODE GENERIEREN", command=self.generate, bg="green", fg="white", font=('Arial', 10, 'bold'), padx=20).pack(side="right")
+        tk.Button(top_btn_frame, text="+ Variable hinzufügen", command=self.add_row, bg="#e1e1e1", padx=10).grid(row=0, column=0, sticky="ew")
+
+        # Scrollable container for variables (middle area)
+        content_frame = tk.Frame(self.variables_tab)
+        content_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=0)
+        content_frame.grid_rowconfigure(0, weight=1)
+        content_frame.grid_columnconfigure(0, weight=1)
+
+        canvas = tk.Canvas(content_frame, bg="white", highlightthickness=0)
+        scrollbar = tk.Scrollbar(content_frame, orient="vertical", command=canvas.yview)
+        
+        self.main_frame = tk.Frame(canvas, bg="white")
+        self.main_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        
+        canvas.create_window((0, 0), window=self.main_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        
+        # Mousewheel scrolling support
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        canvas.bind("<MouseWheel>", _on_mousewheel)
+        self.main_frame.bind("<MouseWheel>", _on_mousewheel)
+
+        # Bottom button area - ALWAYS VISIBLE and accessible
+        btn_frame = tk.Frame(self.variables_tab, bg="#f9f9f9", relief="raised", borderwidth=1)
+        btn_frame.grid(row=2, column=0, sticky="ew", padx=0, pady=(5, 0))
+        btn_frame.grid_columnconfigure(1, weight=1)
+        
+        help_label = tk.Label(btn_frame, text="Scroll variables →", font=("Arial", 9), fg="#333", bg="#f9f9f9")
+        help_label.grid(row=0, column=0, padx=10, pady=8, sticky="w")
+        
+        generate_btn = tk.Button(btn_frame, text="CODE GENERIEREN", command=self.generate, bg="green", fg="white", font=('Arial', 11, 'bold'), padx=15, pady=8)
+        generate_btn.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
 
     def browse_cs_file(self):
         file_path = filedialog.askopenfilename(
@@ -281,36 +331,46 @@ class GeneratorUI:
             return []
 
     def add_row(self, cpp="", cs="", name=""):
-        row_frame = tk.Frame(self.main_frame)
-        row_frame.pack(fill="x", pady=2)
+        row_num = len(self.rows)
+        row_data = {}
+        
+        # Create container frame for this row
+        row_frame = tk.Frame(self.main_frame, bg="white", relief="groove", borderwidth=1)
+        row_frame.grid(row=row_num, column=0, sticky="ew", padx=2, pady=1)
+        row_frame.grid_columnconfigure(4, weight=1)  # Let the name field expand
 
-        # Sortier-Buttons
-        up_btn = tk.Button(row_frame, text="▲", width=2, command=lambda: self.move_up(row_frame))
-        up_btn.pack(side="left", padx=1)
-        down_btn = tk.Button(row_frame, text="▼", width=2, command=lambda: self.move_down(row_frame))
-        down_btn.pack(side="left", padx=1)
+        # Sort buttons (left side, fixed width)
+        up_btn = tk.Button(row_frame, text="▲", width=2, font=("Arial", 8), command=lambda: self.move_up(row_frame))
+        up_btn.grid(row=0, column=0, padx=1, pady=1, sticky="n")
+        
+        down_btn = tk.Button(row_frame, text="▼", width=2, font=("Arial", 8), command=lambda: self.move_down(row_frame))
+        down_btn.grid(row=0, column=1, padx=1, pady=1, sticky="n")
 
-        # Dropdown für Datentypen
-        type_combo = ttk.Combobox(row_frame, width=18, state="readonly")
+        # Type combo (fixed width)
+        type_combo = ttk.Combobox(row_frame, width=12, state="readonly", font=("Arial", 9))
         type_combo['values'] = list(TYPE_MAPPING.keys())
-        type_combo.pack(side="left", padx=5)
+        type_combo.grid(row=0, column=2, padx=2, pady=1, sticky="ew")
 
-        cpp_ent = tk.Entry(row_frame, width=15)
+        # C++ Type entry (fixed width)
+        cpp_ent = tk.Entry(row_frame, width=9, font=("Arial", 9))
         cpp_ent.insert(0, cpp)
-        cpp_ent.pack(side="left", padx=5)
+        cpp_ent.grid(row=0, column=3, padx=2, pady=1, sticky="ew")
 
-        cs_ent = tk.Entry(row_frame, width=15)
+        # C# Type entry (fixed width)
+        cs_ent = tk.Entry(row_frame, width=9, font=("Arial", 9))
         cs_ent.insert(0, cs)
-        cs_ent.pack(side="left", padx=5)
+        cs_ent.grid(row=0, column=4, padx=2, pady=1, sticky="ew")
 
-        name_ent = tk.Entry(row_frame, width=25)
+        # Name entry (expandable)
+        name_ent = tk.Entry(row_frame, font=("Arial", 9))
         name_ent.insert(0, name)
-        name_ent.pack(side="left", padx=5)
+        name_ent.grid(row=0, column=5, padx=2, pady=1, sticky="ew")
 
-        btn_del = tk.Button(row_frame, text="X", fg="red", command=lambda: self.delete_row(row_frame))
-        btn_del.pack(side="right")
+        # Delete button (right side, fixed width)
+        btn_del = tk.Button(row_frame, text="✕", fg="red", font=("Arial", 10), width=2, command=lambda: self.delete_row(row_frame))
+        btn_del.grid(row=0, column=6, padx=1, pady=1, sticky="e")
 
-        # Bind dropdown selection to fill C++ and C# types
+        # Bind dropdown selection
         def on_type_select(event):
             selected = type_combo.get()
             if selected in TYPE_MAPPING:
@@ -322,7 +382,8 @@ class GeneratorUI:
 
         type_combo.bind("<<ComboboxSelected>>", on_type_select)
 
-        self.rows.append({"frame": row_frame, "cpp": cpp_ent, "cs": cs_ent, "name": name_ent})
+        row_data = {"frame": row_frame, "cpp": cpp_ent, "cs": cs_ent, "name": name_ent}
+        self.rows.append(row_data)
 
     def move_up(self, frame):
         idx = self.get_index(frame)
@@ -342,10 +403,9 @@ class GeneratorUI:
         return -1
 
     def refresh_ui(self):
-        for row in self.rows:
-            row["frame"].pack_forget()
-        for row in self.rows:
-            row["frame"].pack(fill="x", pady=2)
+        # Re-grid all rows with updated positions
+        for i, row in enumerate(self.rows):
+            row["frame"].grid(row=i, column=0, sticky="ew", padx=2, pady=1)
 
     def delete_row(self, frame):
         idx = self.get_index(frame)
@@ -416,142 +476,128 @@ class GeneratorUI:
             messagebox.showerror("Fehler", str(e))
 
     def setup_statemachine_tab(self):
-        """Tab für Zustandsautomaten mit responsivem Design"""
-        main_container = tk.Frame(self.statemachine_tab)
-        main_container.pack(fill="both", expand=True, padx=5, pady=5)
+        """Tab für Zustandsautomaten mit responsivem Grid-Layout"""
+        # Configure grid weights
+        self.statemachine_tab.grid_rowconfigure(2, weight=1)  # Middle section expands
+        self.statemachine_tab.grid_rowconfigure(3, weight=1)  # Code output expands
+        self.statemachine_tab.grid_columnconfigure(0, weight=1)  # Full width
 
-        # Konfigurierungs-Bereich (oben)
-        config_frame = tk.LabelFrame(main_container, text="Konfiguration", padx=10, pady=10)
-        config_frame.pack(fill="x", pady=(0, 5))
+        # --- TOP: Configuration Section ---
+        config_frame = tk.LabelFrame(self.statemachine_tab, text="Konfiguration", padx=10, pady=10)
+        config_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 0))
+        config_frame.grid_columnconfigure(1, weight=1)
 
         # Klassenname
-        class_frame = tk.Frame(config_frame)
-        class_frame.pack(fill="x", pady=(0, 5))
-        tk.Label(class_frame, text="Klassenname:", width=15, anchor="w").pack(side="left")
-        self.classname_entry = tk.Entry(class_frame, width=40)
+        tk.Label(config_frame, text="Klassenname:", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 5))
+        self.classname_entry = tk.Entry(config_frame, font=("Arial", 9))
         self.classname_entry.insert(0, "CanFrameSender")
-        self.classname_entry.pack(side="left", padx=5, fill="x", expand=True)
+        self.classname_entry.grid(row=0, column=1, sticky="ew", pady=(0, 5))
 
-        # States und Events nebeneinander
-        input_container = tk.Frame(config_frame)
-        input_container.pack(fill="both", expand=True, pady=(0, 5))
-
-        # States
-        states_frame = tk.LabelFrame(input_container, text="States", padx=5, pady=5)
-        states_frame.pack(side="left", fill="both", expand=True, padx=(0, 2))
-        self.states_text = tk.Text(states_frame, height=4, width=25)
+        # States and Events side-by-side
+        states_frame = tk.LabelFrame(config_frame, text="States (eine pro Zeile)", padx=5, pady=5)
+        states_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 2), pady=(0, 0))
+        self.states_text = tk.Text(states_frame, height=4, width=20, font=("Arial", 8))
         self.states_text.pack(fill="both", expand=True)
         self.states_text.bind("<KeyRelease>", lambda e: self.update_transition_combos())
 
-        # Events
-        events_frame = tk.LabelFrame(input_container, text="Events", padx=5, pady=5)
-        events_frame.pack(side="left", fill="both", expand=True, padx=2)
-        self.events_text = tk.Text(events_frame, height=4, width=25)
+        events_frame = tk.LabelFrame(config_frame, text="Events (eine pro Zeile)", padx=5, pady=5)
+        events_frame.grid(row=1, column=1, sticky="nsew", padx=(2, 0), pady=(0, 0))
+        self.events_text = tk.Text(events_frame, height=4, width=20, font=("Arial", 8))
         self.events_text.pack(fill="both", expand=True)
         self.events_text.bind("<KeyRelease>", lambda e: self.update_transition_combos())
 
-        # Mittlerer Bereich: Übergänge Builder + Liste + Outputs (nebeneinander)
-        middle_container = tk.Frame(main_container)
-        middle_container.pack(fill="both", expand=True, pady=5)
+        config_frame.grid_rowconfigure(1, weight=0)
 
-        # Linke Seite: Builder
-        builder_frame = tk.LabelFrame(middle_container, text="Neuer Übergang", padx=8, pady=8)
-        builder_frame.pack(side="left", fill="both", expand=False, padx=(0, 5), ipadx=5)
+        # --- MIDDLE: Builder + Transitions List ---
+        middle_frame = tk.Frame(self.statemachine_tab)
+        middle_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        middle_frame.grid_columnconfigure(0, weight=0)
+        middle_frame.grid_columnconfigure(1, weight=1)
+        middle_frame.grid_rowconfigure(0, weight=1)
 
-        # Von State
+        # Builder on left
+        builder_frame = tk.LabelFrame(middle_frame, text="Neuer Übergang", padx=8, pady=8)
+        builder_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+
         tk.Label(builder_frame, text="Von State:", font=("Arial", 8, "bold")).pack(anchor="w", pady=(0, 2))
-        self.trans_from_combo = ttk.Combobox(builder_frame, width=20, state="readonly")
+        self.trans_from_combo = ttk.Combobox(builder_frame, width=15, state="readonly", font=("Arial", 8))
         self.trans_from_combo.pack(fill="x", pady=(0, 5))
 
-        # Event
         tk.Label(builder_frame, text="Event:", font=("Arial", 8, "bold")).pack(anchor="w", pady=(0, 2))
-        self.trans_event_combo = ttk.Combobox(builder_frame, width=20, state="readonly")
+        self.trans_event_combo = ttk.Combobox(builder_frame, width=15, state="readonly", font=("Arial", 8))
         self.trans_event_combo.pack(fill="x", pady=(0, 5))
 
-        # Zu State
         tk.Label(builder_frame, text="Zu State:", font=("Arial", 8, "bold")).pack(anchor="w", pady=(0, 2))
-        self.trans_to_combo = ttk.Combobox(builder_frame, width=20, state="readonly")
+        self.trans_to_combo = ttk.Combobox(builder_frame, width=15, state="readonly", font=("Arial", 8))
         self.trans_to_combo.pack(fill="x", pady=(0, 5))
 
-        # Bedingungen
-        tk.Label(builder_frame, text="Bedingungen (optional):", font=("Arial", 8, "bold")).pack(anchor="w", pady=(5, 2))
-
-        # Time Condition (t)
-        time_frame = tk.Frame(builder_frame)
-        time_frame.pack(fill="x", pady=(0, 5))
+        tk.Label(builder_frame, text="Bedingungen:", font=("Arial", 8, "bold")).pack(anchor="w", pady=(5, 2))
         self.time_check = tk.BooleanVar(value=False)
-        tk.Checkbutton(time_frame, text="Zeit (t)", variable=self.time_check, width=8).pack(side="left")
-        self.time_op_combo = ttk.Combobox(time_frame, width=3, state="readonly", values=[">", "<", "==", ">=", "<=", "!="])
+        tk.Checkbutton(builder_frame, text="Zeit (t)", variable=self.time_check, font=("Arial", 8)).pack(anchor="w")
+        
+        time_fields = tk.Frame(builder_frame)
+        time_fields.pack(fill="x", padx=(15, 0), pady=(0, 5))
+        self.time_op_combo = ttk.Combobox(time_fields, width=3, state="readonly", values=[">", "<", "==", ">=", "<=", "!="], font=("Arial", 8))
         self.time_op_combo.set(">")
         self.time_op_combo.pack(side="left", padx=(0, 3))
-        self.time_val_entry = tk.Entry(time_frame, width=8)
+        self.time_val_entry = tk.Entry(time_fields, width=8, font=("Arial", 8))
         self.time_val_entry.insert(0, "0")
         self.time_val_entry.pack(side="left")
 
-        # Click Edge Condition
-        click_frame = tk.Frame(builder_frame)
-        click_frame.pack(fill="x", pady=(0, 8))
         self.click_check = tk.BooleanVar(value=False)
-        tk.Checkbutton(click_frame, text="Click Edge (wahr)", variable=self.click_check, width=18).pack(anchor="w")
+        tk.Checkbutton(builder_frame, text="Click Edge", variable=self.click_check, font=("Arial", 8)).pack(anchor="w", pady=(0, 8))
 
-        # Output Action
-        tk.Label(builder_frame, text="Output Action (optional):", font=("Arial", 8, "bold")).pack(anchor="w", pady=(5, 2))
-        self.output_action_entry = tk.Entry(builder_frame, width=25)
+        tk.Label(builder_frame, text="Output Action:", font=("Arial", 8, "bold")).pack(anchor="w", pady=(5, 2))
+        self.output_action_entry = tk.Entry(builder_frame, font=("Arial", 8))
         self.output_action_entry.pack(fill="x", pady=(0, 8))
-        self.output_action_entry.insert(0, "")
 
-        # Add Button
-        add_trans_btn = tk.Button(builder_frame, text="✓ Übergang hinzufügen", command=self.add_transition, bg="#90EE90", font=("Arial", 9, "bold"))
-        add_trans_btn.pack(fill="x")
+        tk.Button(builder_frame, text="✓ Add", command=self.add_transition, bg="#90EE90", font=("Arial", 9, "bold")).pack(fill="x")
 
-        # Rechte Seite: Übergänge Liste
-        list_frame = tk.LabelFrame(middle_container, text="Definierte Übergänge", padx=8, pady=8)
-        list_frame.pack(side="left", fill="both", expand=True, padx=(5, 0))
+        # Transitions list on right
+        list_frame = tk.LabelFrame(middle_frame, text="Übergänge", padx=8, pady=8)
+        list_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
+        list_frame.grid_rowconfigure(0, weight=1)
+        list_frame.grid_columnconfigure(0, weight=1)
 
-        # Listbox mit Scrollbar
         scrollbar_trans = tk.Scrollbar(list_frame)
-        scrollbar_trans.pack(side="right", fill="y")
+        scrollbar_trans.grid(row=0, column=1, sticky="ns")
         
-        self.transitions_listbox = tk.Listbox(list_frame, height=10, yscrollcommand=scrollbar_trans.set, font=("Courier", 8))
-        self.transitions_listbox.pack(fill="both", expand=True)
+        self.transitions_listbox = tk.Listbox(list_frame, height=12, yscrollcommand=scrollbar_trans.set, font=("Courier", 7))
+        self.transitions_listbox.grid(row=0, column=0, sticky="nsew")
         scrollbar_trans.config(command=self.transitions_listbox.yview)
 
-        # Delete Button
-        del_trans_btn = tk.Button(list_frame, text="✗ Markierten Übergang löschen", command=self.delete_transition, bg="#FFB6C6")
-        del_trans_btn.pack(fill="x", pady=(5, 0))
-
-        # Move Buttons Frame
-        move_frame = tk.Frame(list_frame)
-        move_frame.pack(fill="x", pady=(5, 0))
-        tk.Button(move_frame, text="↑ Nach oben", command=self.move_transition_up, width=12).pack(side="left", padx=2)
-        tk.Button(move_frame, text="↓ Nach unten", command=self.move_transition_down, width=12).pack(side="left", padx=2)
-        tk.Button(move_frame, text="✎ Bearbeiten", command=self.edit_transition, bg="#FFE4B5", width=12).pack(side="left", padx=2)
-
-        # Unterer Bereich: Code Output + Buttons
-        bottom_container = tk.Frame(main_container)
-        bottom_container.pack(fill="both", expand=True, pady=(5, 0))
-
-        # Code Output
-        right_frame = tk.LabelFrame(bottom_container, text="Generierter C++ Code", padx=10, pady=10)
-        right_frame.pack(fill="both", expand=True, side="top")
-
-        # Code Text mit Scrollbar
-        scrollbar = tk.Scrollbar(right_frame)
-        scrollbar.pack(side="right", fill="y")
+        # Buttons under listbox
+        trans_btn_frame = tk.Frame(list_frame)
+        trans_btn_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+        trans_btn_frame.grid_columnconfigure(1, weight=1)
         
-        self.code_output = tk.Text(right_frame, height=10, yscrollcommand=scrollbar.set, font=("Courier", 8))
-        self.code_output.pack(fill="both", expand=True)
+        tk.Button(trans_btn_frame, text="Del", command=self.delete_transition, bg="#FFB6C6", font=("Arial", 7), width=4).grid(row=0, column=0, padx=1)
+        tk.Button(trans_btn_frame, text="↑", command=self.move_transition_up, font=("Arial", 9), width=3).grid(row=0, column=1, padx=1)
+        tk.Button(trans_btn_frame, text="↓", command=self.move_transition_down, font=("Arial", 9), width=3).grid(row=0, column=2, padx=1)
+        tk.Button(trans_btn_frame, text="Edit", command=self.edit_transition, bg="#FFE4B5", font=("Arial", 7), width=4).grid(row=0, column=3, padx=1)
+
+        # --- Code Output Section ---
+        code_frame = tk.LabelFrame(self.statemachine_tab, text="Generierter Code", padx=10, pady=10)
+        code_frame.grid(row=2, column=0, sticky="nsew", padx=5, pady=5)
+        code_frame.grid_rowconfigure(0, weight=1)
+        code_frame.grid_columnconfigure(0, weight=1)
+
+        scrollbar = tk.Scrollbar(code_frame)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        
+        self.code_output = tk.Text(code_frame, height=8, yscrollcommand=scrollbar.set, font=("Courier", 7))
+        self.code_output.grid(row=0, column=0, sticky="nsew")
         scrollbar.config(command=self.code_output.yview)
 
-        # Buttons Bereich
-        btn_frame = tk.Frame(bottom_container)
-        btn_frame.pack(fill="x", side="bottom", pady=(5, 0))
-        
-        tk.Button(btn_frame, text="CODE GENERIEREN", command=self.generate_statemachine, bg="green", fg="white", font=('Arial', 10, 'bold')).pack(side="right", padx=5)
-        tk.Button(btn_frame, text="Code kopieren", command=self.copy_code_to_clipboard, font=('Arial', 9)).pack(side="right", padx=2)
-        tk.Button(btn_frame, text="Beispiel laden", command=self.load_example_sm, font=('Arial', 9)).pack(side="right", padx=2)
+        # --- Bottom Buttons ---
+        btn_frame = tk.Frame(self.statemachine_tab, bg="#f9f9f9", relief="raised", borderwidth=1)
+        btn_frame.grid(row=3, column=0, sticky="ew", padx=0, pady=(5, 0))
+        btn_frame.grid_columnconfigure(1, weight=1)
 
-        # State machine transitions storage
+        tk.Button(btn_frame, text="Load Ex", command=self.load_example_sm, font=('Arial', 8), width=7).grid(row=0, column=0, padx=2, pady=5)
+        tk.Button(btn_frame, text="Copy", command=self.copy_code_to_clipboard, font=('Arial', 8), width=6).grid(row=0, column=1, padx=2, pady=5, sticky="w")
+        tk.Button(btn_frame, text="CODE GENERIEREN", command=self.generate_statemachine, bg="green", fg="white", font=('Arial', 10, 'bold')).grid(row=0, column=2, padx=10, pady=5, sticky="ew")
+
         self.sm_transitions = []
 
     def load_example_sm(self):
